@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Remote Job Finder</title>
+<style>
+  :root{
+    --ink:#1b1f23;
+    --paper:#f6f5f1;
+    --line:#d9d6cd;
+    --accent:#2f6f4f;
+    --accent-dim:#e4efe8;
+    --muted:#6b6f66;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:'Georgia', 'Times New Roman', serif;
+    background:var(--paper);
+    color:var(--ink);
+  }
+  header{
+    padding:2.5rem 1.5rem 1.5rem;
+    border-bottom:2px solid var(--ink);
+    max-width:1000px;
+    margin:0 auto;
+  }
+  header h1{
+    font-size:2.2rem;
+    margin:0 0 0.25rem;
+    letter-spacing:-0.02em;
+  }
+  header p{
+    font-family:Arial, Helvetica, sans-serif;
+    color:var(--muted);
+    margin:0;
+    font-size:0.95rem;
+  }
+  .controls{
+    max-width:1000px;
+    margin:1.5rem auto 0;
+    padding:0 1.5rem;
+    display:flex;
+    gap:0.75rem;
+    flex-wrap:wrap;
+    font-family:Arial, Helvetica, sans-serif;
+  }
+  .controls input, .controls select{
+    padding:0.6rem 0.8rem;
+    border:1px solid var(--line);
+    background:#fff;
+    font-size:0.95rem;
+    border-radius:2px;
+  }
+  .controls input[type="text"]{flex:1;min-width:200px;}
+  .controls button{
+    padding:0.6rem 1.1rem;
+    background:var(--ink);
+    color:#fff;
+    border:none;
+    cursor:pointer;
+    font-size:0.9rem;
+    letter-spacing:0.02em;
+  }
+  .meta-bar{
+    max-width:1000px;
+    margin:0.75rem auto 0;
+    padding:0 1.5rem;
+    font-family:Arial, Helvetica, sans-serif;
+    font-size:0.85rem;
+    color:var(--muted);
+  }
+  main{
+    max-width:1000px;
+    margin:1rem auto 3rem;
+    padding:0 1.5rem;
+  }
+  .job{
+    border-bottom:1px solid var(--line);
+    padding:1.2rem 0;
+    display:flex;
+    gap:1.2rem;
+    align-items:flex-start;
+  }
+  .job img{
+    width:48px;height:48px;object-fit:contain;border:1px solid var(--line);background:#fff;padding:4px;
+  }
+  .job-body{flex:1;min-width:0;}
+  .job-title{
+    font-size:1.15rem;
+    margin:0 0 0.2rem;
+  }
+  .job-title a{color:var(--ink);text-decoration:none;}
+  .job-title a:hover{text-decoration:underline;}
+  .job-sub{
+    font-family:Arial, Helvetica, sans-serif;
+    font-size:0.85rem;
+    color:var(--muted);
+    margin-bottom:0.4rem;
+  }
+  .tag{
+    display:inline-block;
+    font-family:Arial, Helvetica, sans-serif;
+    font-size:0.75rem;
+    background:var(--accent-dim);
+    color:var(--accent);
+    padding:0.15rem 0.5rem;
+    border-radius:10px;
+    margin-right:0.4rem;
+  }
+  #status{
+    font-family:Arial, Helvetica, sans-serif;
+    text-align:center;
+    color:var(--muted);
+    padding:2rem 0;
+  }
+  .error{
+    font-family:Arial, Helvetica, sans-serif;
+    background:#fdecea;
+    border:1px solid #f5c2bc;
+    color:#a13a2f;
+    padding:1rem;
+    border-radius:4px;
+    max-width:1000px;
+    margin:1rem auto;
+  }
+  footer{
+    font-family:Arial, Helvetica, sans-serif;
+    text-align:center;
+    color:var(--muted);
+    font-size:0.8rem;
+    padding:1.5rem;
+  }
+  footer a{color:var(--accent);}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Remote Job Finder</h1>
+  <p>Live remote job listings, searchable and sortable — powered by the Remotive API.</p>
+</header>
+
+<div class="controls">
+  <input type="text" id="search" placeholder="Search by title or keyword (e.g. 'react', 'writer')">
+  <select id="category">
+    <option value="">All categories</option>
+  </select>
+  <select id="sort">
+    <option value="date-desc">Newest first</option>
+    <option value="date-asc">Oldest first</option>
+    <option value="title-asc">Title A–Z</option>
+    <option value="company-asc">Company A–Z</option>
+  </select>
+  <button id="refresh">Search</button>
+</div>
+<div class="meta-bar" id="metaBar"></div>
+
+<main id="results">
+  <div id="status">Loading jobs…</div>
+</main>
+
+<footer>
+  Data provided by the <a href="https://remotive.com/remote-jobs/api" target="_blank" rel="noopener">Remotive API</a> (free, public, no key required).
+</footer>
+
+<script>
+const API_URL = "https://remotive.com/api/remote-jobs";
+let allJobs = [];
+
+const resultsEl = document.getElementById('results');
+const statusEl = () => document.getElementById('status');
+const metaBar = document.getElementById('metaBar');
+const searchEl = document.getElementById('search');
+const categoryEl = document.getElementById('category');
+const sortEl = document.getElementById('sort');
+const refreshBtn = document.getElementById('refresh');
+
+async function loadJobs(){
+  resultsEl.innerHTML = '<div id="status">Loading jobs…</div>';
+  try{
+    const res = await fetch(API_URL);
+    if(!res.ok){
+      throw new Error(`API responded with status ${res.status}`);
+    }
+    const data = await res.json();
+    if(!data.jobs || !Array.isArray(data.jobs)){
+      throw new Error("Unexpected response format from API");
+    }
+    allJobs = data.jobs;
+    populateCategories(allJobs);
+    render();
+  }catch(err){
+    resultsEl.innerHTML = `<div class="error">
+      Couldn't load job listings right now (${err.message}).
+      This may be a temporary API issue — try clicking "Search" again in a moment.
+    </div>`;
+  }
+}
+
+function populateCategories(jobs){
+  const cats = [...new Set(jobs.map(j => j.category).filter(Boolean))].sort();
+  categoryEl.innerHTML = '<option value="">All categories</option>' +
+    cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+}
+
+function render(){
+  const q = searchEl.value.trim().toLowerCase();
+  const cat = categoryEl.value;
+  const sort = sortEl.value;
+
+  let filtered = allJobs.filter(j => {
+    const matchesQuery = !q || (j.title && j.title.toLowerCase().includes(q)) ||
+                          (j.company_name && j.company_name.toLowerCase().includes(q)) ||
+                          (j.tags && j.tags.join(' ').toLowerCase().includes(q));
+    const matchesCat = !cat || j.category === cat;
+    return matchesQuery && matchesCat;
+  });
+
+  filtered.sort((a,b) => {
+    switch(sort){
+      case 'date-asc': return new Date(a.publication_date) - new Date(b.publication_date);
+      case 'title-asc': return (a.title||'').localeCompare(b.title||'');
+      case 'company-asc': return (a.company_name||'').localeCompare(b.company_name||'');
+      default: return new Date(b.publication_date) - new Date(a.publication_date);
+    }
+  });
+
+  metaBar.textContent = `${filtered.length} job${filtered.length===1?'':'s'} found`;
+
+  if(filtered.length === 0){
+    resultsEl.innerHTML = '<div id="status">No jobs match your search. Try a different keyword or category.</div>';
+    return;
+  }
+
+  resultsEl.innerHTML = filtered.slice(0, 100).map(j => `
+    <div class="job">
+      <img src="${escapeHtml(j.company_logo_url || '')}" alt="" onerror="this.style.display='none'">
+      <div class="job-body">
+        <h3 class="job-title"><a href="${escapeHtml(j.url)}" target="_blank" rel="noopener">${escapeHtml(j.title)}</a></h3>
+        <div class="job-sub">${escapeHtml(j.company_name || 'Unknown company')} · ${escapeHtml(j.candidate_required_location || 'Location not specified')} · ${formatDate(j.publication_date)}</div>
+        <span class="tag">${escapeHtml(j.category || 'General')}</span>
+        <span class="tag">${escapeHtml(j.job_type || '')}</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function formatDate(d){
+  if(!d) return '';
+  const date = new Date(d);
+  if(isNaN(date)) return '';
+  return date.toLocaleDateString(undefined, {year:'numeric', month:'short', day:'numeric'});
+}
+
+function escapeHtml(str){
+  if(str === undefined || str === null) return '';
+  return String(str)
+    .replaceAll('&','&amp;')
+    .replaceAll('<','&lt;')
+    .replaceAll('>','&gt;')
+    .replaceAll('"','&quot;');
+}
+
+refreshBtn.addEventListener('click', render);
+searchEl.addEventListener('keyup', e => { if(e.key === 'Enter') render(); });
+categoryEl.addEventListener('change', render);
+sortEl.addEventListener('change', render);
+
+loadJobs();
+</script>
+
+</body>
+</html>
